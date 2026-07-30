@@ -5,9 +5,9 @@ into ML-ready pharmacokinetic / ADME data — **Acquire → Clean → Prose → 
 Fine-tune → Evaluate → Enrich & flatten** — built over a merged knowledge graph of the pipeline's
 source repositories.
 
-**View it live** via this repository's GitHub Pages (the link is in the repo's *About* panel / *Settings →
-Pages*). Or download **`index.html`** and open it in any browser — it's fully self-contained: no server,
-no build step, no network requests, everything inlined.
+**[▶ View it live](https://mojitopop.github.io/pk-adme-pipeline-atlas-public/)** — or download
+**`index.html`** and open it in any browser: it's fully self-contained (no server, no build step, no
+network requests, everything inlined).
 
 ## What's inside
 
