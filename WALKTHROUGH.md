@@ -1707,27 +1707,27 @@ _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 
 | `accumulation_ratio` | 5 | 0.000 |
 | `bile_elim` | 2 | 0.500 |
 
-### Candidate · v3 granular (NuExtract3) — NOT deployed
+### Latest candidates · granular re-picks vs deployed (2026-08-05)
 
-`real_gold_38row::routed_noca_tol02_2026-08-04` — CANDIDATE, NOT deployed. gold39 F1 0.859 (P 0.944 / R 0.788, TP/FP/FN 719/43/194, misattr 8) beats the deployed winner 0.834 by +0.025 — but runs on the NuExtract3 base (deployed = NuExtract-2.0-8B), so promotion is a pipeline-integration change pending a hardening re-gen / 2nd-slice confirm. Winner reproduced at exactly 0.834 in the SAME call → valid frame; exact-match (tol 0) re-score confirms the lead is not a leniency artifact (0.858 vs 0.834, identical TP). Gains: AUC recall (abs-725, 201 vs 174 TP) + CL/t_half precision (elim-475). Recipe: lora_eval_cluster_bundle/review_sheets/v3_granular_candidate_recipe_20260804.md.
+`real_gold_38row::routed_noca_tol02_2026-08-05` — Latest granular checkpoint-hunt board (2026-08-05), directly comparable. v3 granular 0.859 (NuExtract3, abs-725/dist-250/elim-475) is the BEST measured but on a different base than the deployed winner → integration change, still a CANDIDATE; production stays 0.834. v2 granular 0.811 (2026-08-05, NuExtract-2.0-8B = the DEPLOYED/promotable base, a400/d525/e1275) tried to beat the winner via granular checkpoint selection (dist+elim beat the winner on VAL) but the merged gold39 RECALL dropped 0.744→0.711 — 4th confirmation that per-arm val gains don't transfer → CLOSED NEGATIVE. So on the promotable base the deployed winner (0.834) remains best; the remaining lever is table re-mining (better training DATA, not checkpoint selection). Arc: SCORING_EVOLUTION.md 2026-08-05 / 2026-08-04.
 
-_score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 2501; v3 granular recall re-pick (abs-725/dist-250/elim-475) on NuExtract3, merged TABLE_PREFERRED=AUC,Cmax,Tmax,CL,t_half + dimension guard, scored beside the deployed winner in one call._
+_score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 2501; all three arms scored in ONE call vs the same gold (merged TABLE_PREFERRED + dimension guard)._
 
-| Parameter | Gold n | v3 granular a725/d250/e475 (NuExtract3, candidate) F1 | gold39_specialists_hybrid_C_dimguard (deployed) F1 |
-|---|---:|---:|---:|
-| `AUC` | 252 | 0.885 | 0.815 |
-| `Cmax` | 158 | 0.848 | 0.849 |
-| `t_half` | 112 | 0.846 | 0.864 |
-| `Tmax` | 81 | 0.911 | 0.921 |
-| `CL` | 75 | 0.836 | 0.706 |
-| `urine_elim` | 53 | 0.768 | 0.781 |
-| `Vd` | 50 | 0.941 | 0.905 |
-| `F` | 49 | 0.844 | 0.879 |
-| `PPB` | 48 | 0.933 | 0.897 |
-| `fecal_elim` | 20 | 0.809 | 0.864 |
-| `time_to_steady_state` | 8 | 0.000 | 0.000 |
-| `accumulation_ratio` | 5 | 0.000 | 0.000 |
-| `bile_elim` | 2 | 1.000 | 0.500 |
+| Parameter | Gold n | v3 granular a725/d250/e475 (NuExtract3, candidate best) F1 | gold39_specialists_hybrid_C_dimguard (deployed) F1 | v2 granular a400/d525/e1275 (NuExtract-2.0-8B) F1 |
+|---|---:|---:|---:|---:|
+| `AUC` | 252 | 0.885 | 0.815 | 0.785 |
+| `Cmax` | 158 | 0.848 | 0.849 | 0.854 |
+| `t_half` | 112 | 0.846 | 0.864 | 0.812 |
+| `Tmax` | 81 | 0.911 | 0.921 | 0.907 |
+| `CL` | 75 | 0.836 | 0.706 | 0.744 |
+| `urine_elim` | 53 | 0.768 | 0.781 | 0.780 |
+| `Vd` | 50 | 0.941 | 0.905 | 0.928 |
+| `F` | 49 | 0.844 | 0.879 | 0.776 |
+| `PPB` | 48 | 0.933 | 0.897 | 0.828 |
+| `fecal_elim` | 20 | 0.809 | 0.864 | 0.762 |
+| `time_to_steady_state` | 8 | 0.000 | 0.000 | 0.000 |
+| `accumulation_ratio` | 5 | 0.000 | 0.000 | 0.000 |
+| `bile_elim` | 2 | 1.000 | 0.500 | 0.000 |
 
 ### Full gold · compound-aware
 
