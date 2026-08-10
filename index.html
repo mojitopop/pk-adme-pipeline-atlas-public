@@ -307,6 +307,30 @@ svg.graph.grab{cursor:grabbing}
   .chartbox{overflow-x:auto}
   .chartbox svg{min-width:640px}
 }
+@media (max-width:600px){
+  /* ---- larger, more legible type on phones ---- */
+  body{font-size:15.5px}
+  .vhead{font-size:17px}
+  .vsub{font-size:13.8px;line-height:1.62}
+  .caveat{font-size:13.8px;line-height:1.6}
+  .stbl{font-size:13px}
+  .stbl th{font-size:10.5px}
+  .stbl td{padding:7px 10px}
+  .stbl .st{font-size:11.5px}
+  .chipbtn{font-size:12.5px;padding:7px 13px}
+  #nav .seg button{font-size:15px}
+  .stat b{font-size:17px}
+  .mfile{font-size:16px}
+  .snarr{font-size:14px}
+  /* ---- always-visible horizontal scrollbar on wide scroll boxes (tables + charts) ---- */
+  .chartbox,.viewpane [style*="overflow:auto"]{overflow-x:scroll!important;
+    scrollbar-color:var(--s4) var(--bg1);scrollbar-width:auto}
+  .chartbox::-webkit-scrollbar,.viewpane [style*="overflow:auto"]::-webkit-scrollbar{height:13px}
+  .chartbox::-webkit-scrollbar-thumb,.viewpane [style*="overflow:auto"]::-webkit-scrollbar-thumb{
+    background:var(--s4);border-radius:8px;border:2px solid var(--bg1);background-clip:padding-box}
+  .chartbox::-webkit-scrollbar-track,.viewpane [style*="overflow:auto"]::-webkit-scrollbar-track{
+    background:var(--bg1);border-radius:8px}
+}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
@@ -323,9 +347,9 @@ svg.graph.grab{cursor:grabbing}
     <nav id="nav" aria-label="views and search">
       <div class="navttl">Views<button id="navX" aria-label="close menu">✕</button></div>
       <div class="seg" role="group" aria-label="view mode">
-        <button id="mGuided" aria-pressed="true">▸ Guided</button>
+        <button id="mGuided" aria-pressed="false">▸ Guided</button>
         <button id="mDiag" aria-pressed="false">▤ Diagram</button>
-        <button id="mMesh" aria-pressed="false">◇ Full mesh</button>
+        <button id="mMesh" aria-pressed="true">◇ Full mesh</button>
         <button id="mScore" aria-pressed="false">↗ Scoring</button>
         <button id="mResults" aria-pressed="false">★ Results</button>
       </div>
@@ -1722,7 +1746,7 @@ window.addEventListener('resize',()=>{ if(window.innerWidth>1180) closeNav(); })
 $('#counts').innerHTML=`<b>${DATA.counts.nodes.toLocaleString()}</b> nodes · <b>${DATA.counts.edges.toLocaleString()}</b> edges<br><b>${DATA.counts.communities}</b> communities · <b>${BR.length}</b> bridges`;
 buildRail();
 document.documentElement.style.setProperty('--hue',HUE[0]);
-renderLeft(); renderRight(); drawGuided();
+renderLeft(); renderRight(); setMode('mesh');   /* default landing view = Full mesh */
 window.addEventListener('resize',()=>{
   if(state.mode==='mesh'){ if(MESH.shape==='flat') drawMesh(); /* 3D re-sizes inside its own loop */ }
   else if(state.mode==='guided') drawGuided();
