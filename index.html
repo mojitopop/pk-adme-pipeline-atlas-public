@@ -330,6 +330,13 @@ svg.graph.grab{cursor:grabbing}
     background:var(--s4);border-radius:8px;border:2px solid var(--bg1);background-clip:padding-box}
   .chartbox::-webkit-scrollbar-track,.viewpane [style*="overflow:auto"]::-webkit-scrollbar-track{
     background:var(--bg1);border-radius:8px}
+  /* ---- "swipe" hint band pinned above each wide table (stays visible while scrolling sideways) ---- */
+  .viewpane [style*="overflow:auto"]{position:relative}
+  .viewpane [style*="overflow:auto"]::before{
+    content:"← swipe for more →";position:sticky;left:0;z-index:6;display:block;width:100%;
+    box-sizing:border-box;padding:5px 8px;text-align:center;
+    font:600 10px/1.4 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--s4);
+    background:rgba(13,20,32,.94);border-bottom:1px dashed var(--line2)}
 }
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms!important;transition-duration:.001ms!important}
