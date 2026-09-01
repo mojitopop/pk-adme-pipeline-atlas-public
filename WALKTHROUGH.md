@@ -1795,7 +1795,7 @@ The all-parameter scorer broken out per PK parameter, sorted by gold volume, for
 
 ### Full gold · compound-aware, optimal assignment (CURRENT DEFAULT)
 
-`real_gold_38row::compound_aware_optimal_tol02_2026-08-31` — The only board here on the CURRENT metric. Compound-awareness costs every arm 12–15 F1 versus the row-pooled boards below, and the two are NOT comparable — a value filed under the wrong compound is now charged as a false positive. FULL-COVERAGE ARMS ONLY (37/37): 27 of the 86 rescored arms are partial and are excluded, because `gold_total` is 924 for them too and so cannot be used to spot them — filter on `rows_scored`. Sonnet 4.6 and GPT-5.6 sit at 36/37 and are therefore absent from this board; their compound-aware figures are in ↗ Benchmark. NAMING CAVEAT, unresolved: the published deployed-v4 figure 0.7120 (702/346/222) reproduces here under `curated_v4_gf_C` / `curated_v4_abs875_C`, and matches the ledger audit's per-row worst cases on 4/4 probed rows — but the dir named `curated_v4_deploy_C` scores 0.7082 (694/342/230). The number is sound; which directory is "deployed v4" is not. Provenance + the full reconciliation: `_build/stage_ca_board.py`.
+`real_gold_38row::compound_aware_optimal_tol02_2026-08-31` — The only board here on the CURRENT metric. Compound-awareness costs every arm 12–15 F1 versus the row-pooled boards below, and the two are NOT comparable — a value filed under the wrong compound is now charged as a false positive. FULL-COVERAGE ARMS ONLY (37/37): 27 of the 86 rescored arms are partial and are excluded, because `gold_total` is 924 for them too and so cannot be used to spot them — filter on `rows_scored`. Sonnet 4.6 and GPT-5.6 sit at 36/37 and are therefore absent from this board; their compound-aware figures are in ↗ Benchmark. ARM-DIRECTORY CAVEAT (resolved 2026-09-01): the deployed-v4 figure 0.7120 (702/346/222) is the GATE-VERIFIED one and is correct — `run_curated_v4_deployment.sh:53` pins the deployment parity gate at F1 0.863 / TP 715 / FP 29 / FN 198, and re-running that gate locally reproduces it exactly under `curated_v4_abs875_C` and `curated_v4_gf_C`. What is STALE is the on-disk directory `allparam_arms/curated_v4_deploy_C`: it scores 704/30/209 row-pooled (0.8549) and 0.7082 compound-aware, so it FAILS the deployment script's own parity assertion and no longer holds the gated model's predictions. That is why this board shows `curated_v4_abs875_C` / `curated_v4_gf_C` as the deployed pair and `curated_v4_deploy_C` separately. Provenance + full reconciliation: `_build/stage_ca_board.py`.
 
 _score_all_params_v2 DEFAULT since 2026-08-31 (FIX8): compound-aware, optimal assignment, (compound,param) bags, tol ±0.02, exclude 2501 + 2566; 37 rows, gold total 924_
 
@@ -1807,8 +1807,8 @@ _score_all_params_v2 DEFAULT since 2026-08-31 (FIX8): compound-aware, optimal as
 | `Tmax` | 82 | 0.642 | 0.642 | 0.642 | 0.642 | 0.670 | 0.614 | 0.643 | 0.547 | 0.537 | 0.555 | 0.418 | 0.411 | 0.407 | 0.000 |
 | `CL` | 75 | 0.783 | 0.783 | 0.748 | 0.748 | 0.775 | 0.740 | 0.740 | 0.700 | 0.689 | 0.736 | 0.702 | 0.727 | 0.698 | 0.000 |
 | `urine_elim` | 54 | 0.755 | 0.755 | 0.768 | 0.768 | 0.731 | 0.735 | 0.735 | 0.774 | 0.733 | 0.394 | 0.667 | 0.690 | 0.614 | 0.000 |
-| `Vd` | 50 | 0.939 | 0.939 | 0.980 | 0.980 | 0.835 | 0.939 | 0.939 | 0.905 | 0.909 | 0.903 | 0.897 | 0.842 | 0.897 | 0.000 |
 | `PPB` | 50 | 0.903 | 0.903 | 0.925 | 0.925 | 0.876 | 0.905 | 0.905 | 0.879 | 0.857 | 0.759 | 0.822 | 0.779 | 0.809 | 0.000 |
+| `Vd` | 50 | 0.939 | 0.939 | 0.980 | 0.980 | 0.835 | 0.939 | 0.939 | 0.905 | 0.909 | 0.903 | 0.897 | 0.842 | 0.897 | 0.000 |
 | `F` | 49 | 0.800 | 0.800 | 0.822 | 0.822 | 0.818 | 0.835 | 0.826 | 0.870 | 0.795 | 0.691 | 0.753 | 0.795 | 0.767 | 0.000 |
 | `fecal_elim` | 20 | 0.789 | 0.789 | 0.789 | 0.789 | 0.744 | 0.857 | 0.857 | 0.864 | 0.700 | 0.625 | 0.800 | 0.800 | 0.800 | 0.000 |
 | `time_to_steady_state` | 9 | 0.167 | 0.167 | 0.167 | 0.167 | 0.167 | 0.167 | 0.167 | 0.000 | 0.000 | 0.167 | 0.000 | 0.000 | 0.000 | 0.167 |
@@ -1895,8 +1895,8 @@ _score_all_params_v2 --compound-aware ((compound,param) bags), tol ±0.02, exclu
 | `Tmax` | 82 | 0.609 | 0.451 | 0.450 | 0.446 | 0.542 | 0.534 | 0.539 | 0.534 | 0.504 | 0.526 | 0.473 | 0.346 | 0.393 | 0.253 | 0.459 | 0.491 |
 | `CL` | 75 | 0.694 | 0.756 | 0.766 | 0.736 | 0.711 | 0.700 | 0.620 | 0.637 | 0.690 | 0.727 | 0.625 | 0.672 | 0.632 | 0.419 | 0.305 | 0.222 |
 | `urine_elim` | 53 | 0.740 | 0.673 | 0.696 | 0.619 | 0.743 | 0.738 | 0.722 | 0.743 | 0.693 | 0.679 | 0.740 | 0.717 | 0.710 | 0.528 | 0.506 | 0.273 |
-| `Vd` | 50 | 0.898 | 0.897 | 0.842 | 0.897 | 0.872 | 0.872 | 0.872 | 0.872 | 0.837 | 0.809 | 0.805 | 0.804 | 0.784 | 0.709 | 0.682 | 0.691 |
 | `PPB` | 50 | 0.867 | 0.844 | 0.800 | 0.832 | 0.864 | 0.864 | 0.870 | 0.851 | 0.837 | 0.826 | 0.837 | 0.800 | 0.796 | 0.727 | 0.564 | 0.557 |
+| `Vd` | 50 | 0.898 | 0.897 | 0.842 | 0.897 | 0.872 | 0.872 | 0.872 | 0.872 | 0.837 | 0.809 | 0.805 | 0.804 | 0.784 | 0.709 | 0.682 | 0.691 |
 | `F` | 49 | 0.814 | 0.771 | 0.814 | 0.776 | 0.800 | 0.756 | 0.841 | 0.762 | 0.814 | 0.828 | 0.828 | 0.674 | 0.606 | 0.706 | 0.394 | 0.318 |
 | `fecal_elim` | 20 | 0.700 | 0.800 | 0.800 | 0.800 | 0.800 | 0.800 | 0.857 | 0.800 | 0.829 | 0.826 | 0.857 | 0.667 | 0.667 | 0.540 | 0.750 | 0.743 |
 | `time_to_steady_state` | 9 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.261 | 0.000 | 0.000 |
@@ -1922,8 +1922,8 @@ _score_all_params_v2 --gold gold_table.json (non-compound-aware), tol ±0.02, ex
 | `urine_elim` | 6 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.189 | 0.151 | 0.127 | 0.154 | 0.172 | 0.179 | 0.179 | 0.172 | 0.136 | 0.167 | 0.189 | 0.200 | 0.172 | 0.188 | 0.118 | 0.167 |
 | `time_to_steady_state` | 3 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.143 | 0.000 | 0.000 |
 | `PPB` | 1 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.051 | 0.051 | 0.053 | 0.045 | 0.054 | 0.057 | 0.054 | 0.056 | 0.054 | 0.049 | 0.057 | 0.000 | 0.045 | 0.071 | 0.000 | 0.048 |
-| `accumulation_ratio` | 0 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.000 | — | — |
 | `bile_elim` | 0 | — | — | — | — | — | — | — | — | — | — | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | — | 0.000 |
+| `accumulation_ratio` | 0 | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | 0.000 | — | — |
 
 ### Sonnet teacher baseline · hand gold (trio)
 
