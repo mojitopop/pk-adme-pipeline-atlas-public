@@ -1249,43 +1249,44 @@ Legacy priority18-era Arm A/B runner (whole-text+vsrc vs slice-in/JSON-out), row
 
 **Repo:** `lora_eval`  ·  **Source dir:** `lora_eval_cluster_bundle/`  
 
-**God node:** `score_all_params_v2.py` — The one governed all-parameter scorer every arm routes through; it defines the headline metric (routed vs compound-aware), and score_by_dbsource + the dashboard import its functions to stay bit-identical to the headline.
+**God node:** `score_all_params_v2.py` — The one governed all-parameter scorer every arm routes through; it defines the headline metric — compound-aware with optimal assignment since FIX8 (2026-08-31), row-pooled only via `--no-compound-aware` — and score_by_dbsource + the dashboard import its functions to stay bit-identical to the headline.
 
-The Evaluate stage judges a fine-tuned LoRA adapter (from S7) against the real 38-row hand gold, on the SAME prompt machinery training used so the number reflects the model, not prompt drift. `build_eval_prompts.py` (arm A) and `build_eval_prompts_armb.py` (arm B, slice-shaped) reconstruct the training prompt via `convert_synthgen_to_nuextract.build_compound_prompt` → `prompts.build_nuextract_prompt`. `run_eval_generation.py` loads NuExtract-2.0-8B in 4-bit, optionally applies the adapter, and greedy-decodes one completion per prompt on GPU — run once with `--adapter` (the fine-tuned arm) and once without (the stock baseline), so any delta is the adapter, not sampling. `merge_armb_predictions.py` unions arm B's three per-ADME-slice predictions back into one object per compound (mandatory: the scorer keeps one object per compound, so skipping the merge silently caps recall near a third), and `preds_to_armdir.py` marshals completions into `allparam_arms/<arm>/extract_<row_id>_*.json`. `score_all_params_v2.py` — the governed trio-v2 scorer and this stage's god node — then scores every PK parameter: each PKV is one comparable interval, item↔item matched within a tolerance, with a `--compound-aware` mode keying bags by (compound,param) versus the default row×param 'routed' mode (a different metric definition, never mixed). `split_gold_by_verdict.py` carves the gold into table- vs narrative-derived subsets and `score_by_dbsource.py` buckets by db_source — both reuse the scorer's own functions so the numbers match the headline. `soup_checkpoints.py` averages plateau checkpoints into one adapter, `build_oracle_manifest.py` builds the arm-E count-priming FLOOR manifest, and `verbatim_field_grounding.py` first-passes text-field grounding. The per-arm `out/*.json` score files this stage writes are exactly what the atlas Scoring view (arms.json / params.json / breakdowns.json) consumes.
+The Evaluate stage judges a fine-tuned LoRA adapter (from S7) against the real 38-row hand gold, on the SAME prompt machinery training used so the number reflects the model, not prompt drift. `build_eval_prompts.py` (arm A) and `build_eval_prompts_armb.py` (arm B, slice-shaped) reconstruct the training prompt via `convert_synthgen_to_nuextract.build_compound_prompt` → `prompts.build_nuextract_prompt`. `run_eval_generation.py` loads **NuExtract3** in 4-bit, optionally applies the adapter, and greedy-decodes one completion per prompt on GPU — run once with `--adapter` (the fine-tuned arm) and once without (the stock baseline), so any delta is the adapter, not sampling. **NuExtract-2.0-8B is RETIRED (owner call 2026-08-31)**: every current v5_reviewed adapter trains on NuExtract3, `DEFAULT_BASE_MODEL` is `numind/NuExtract3`, and loading a NuExtract3-trained adapter onto v2 fails outright with lora_A/lora_B size mismatches. `merge_armb_predictions.py` unions arm B's three per-ADME-slice predictions back into one object per compound (mandatory: the scorer keeps one object per compound, so skipping the merge silently caps recall near a third), and `preds_to_armdir.py` marshals completions into `allparam_arms/<arm>/extract_<row_id>_*.json`. `score_all_params_v2.py` — the governed trio-v2 scorer and this stage's god node — then scores every PK parameter: each PKV is one comparable interval, item↔item matched within a tolerance. **Since 2026-08-31 (FIX8) the headline metric is COMPOUND-AWARE by default**, keying bags by (compound,param) and pairing gold to arm compounds by OPTIMAL ASSIGNMENT — compounds keyed by index, every gold↔arm permutation brute-forced, the one maximising the arm's TP kept, so a surviving false positive is genuine misattribution. The pre-flip row-pooled row×param lens is still reachable byte-exact as `--no-compound-aware`, and remains a DIFFERENT metric definition that is never mixed with the default. The scorer also grades the attribute (descriptor) axis on value-MATCHED pairs, reusing the same compound permutation. `split_gold_by_verdict.py` carves the gold into table- vs narrative-derived subsets and `score_by_dbsource.py` buckets by db_source (the latter deliberately still calls `row_bags(row, False)` — compound-blind — because other importers depend on it). `soup_checkpoints.py` averages plateau checkpoints into one adapter, `build_oracle_manifest.py` builds the arm-E count-priming FLOOR manifest, and `verbatim_field_grounding.py` first-passes text-field grounding. The per-arm `out/*.json` score files this stage writes are exactly what the atlas Scoring view (arms.json / params.json / breakdowns.json) consumes.
 
 **Reads**
 - `final_adapter/ (PEFT LoRA + tokenizer)` (artifact; from s7)
 - `data/wip_gold_claude_set.json (38-row hand gold) + out/gold_table.json` (file)
-- `NuExtract-2.0-8B base weights (4-bit, HF cache)` (artifact)
+- `NuExtract3 base weights (4-bit, HF cache) — v2 retired 2026-08-31` (artifact)
 
 **Writes**
 - `allparam_arms/<arm>/extract_<row_id>_*.json (per-arm predictions)` (file)
 - `out/*.json (per-arm P/R/F1 + by_param score files)` (file)
 
-**Hand-off in:** From S7 Fine-tune: the trained final_adapter/ (PEFT LoRA + tokenizer) is loaded onto the 4-bit NuExtract-2.0-8B base by run_eval_generation.py; the hand gold (data/wip_gold_claude_set.json, keyed by row_id + compound) is the reference.
+**Hand-off in:** From S7 Fine-tune: the trained final_adapter/ (PEFT LoRA + tokenizer) is loaded onto the 4-bit **NuExtract3** base by run_eval_generation.py — the base is derived from the adapter's own adapter_config.json (`base_model_name_or_path`), falling back to `numind/NuExtract3`; a disagreement is printed, never silently accepted. The hand gold (data/wip_gold_claude_set.json, keyed by row_id + compound) is the reference.
 
 **Hand-off out:** A QA leaf — hands no data to a downstream pipeline stage (the terminal S9 flatten consumes S4's extraction, not this). Emits allparam_arms/<arm>/*_pred.json + out/*.json score files (per-arm P/R/F1 + by_param, keyed by arm + comparable_key); these feed the atlas Scoring view (arms.json / params.json / breakdowns.json).
 
 ### Scripts & functions
 
 #### `score_all_params_v2.py`
-Governed trio-v2 all-parameter scorer: one interval per PKV, item↔item tolerance match, routed vs compound-aware, misattribution + GMFE overlay.
+Governed trio-v2 all-parameter scorer: one interval per PKV, item↔item tolerance match, COMPOUND-AWARE by default (optimal assignment, FIX8 2026-08-31) with row-pooled available as --no-compound-aware, plus attribute / misattribution / GMFE overlays.
 
-- **`score_param`** `L248` — match one param's gold vs arm item bags within tol → tp/fp/fn (item or number granularity)
-- **`row_bags`** `L174` — bag a row's items by param; compound_aware keys by (compound,param) else row×param
-- **`align_compound_bags`** `L213` — name-aligner pairing gold and arm compounds before scoring (compound-aware mode)
-- **`gold_bag_canonical`** `L311` — collapse gold to canonical rep values so a subgrouped label counts once
-- **`misattributions`** `L334` — flag an unmatched arm value that matches gold under ANOTHER param (unit-gated)
-- **`find_arm_file`** `L373` — glob <arms-dir>/<arm>/extract_<row_id>_*.json — the per-arm predictions to score
+- **`best_compound_assignment`** `L324` — THE DEFAULT ALIGNER: brute-force every gold↔arm compound permutation and keep the one MAXIMISING the arm's TP — arm-favouring by construction, so the reported drop is a FLOOR
+- **`apply_compound_assignment`** `L354` — rewrite both index-keyed bags under the chosen permutation, so the numeric and attribute blocks grade against the SAME compound pairing
+- **`row_bags`** `L200` — bag a row's items by param; compound_aware keys by (compound,param), else row×param (the `--no-compound-aware` opt-out)
+- **`align_compound_bags`** `L239` — SUPERSEDED greedy NAME aligner, reachable only via `--compound-align greedy`: it returns 0.761 on curated_v4_deploy where the published figure is 0.712, and it merges two compounds sharing a name so dedup then destroys a real gold item (gold total 924 → 923)
+- **`score_param`** `L387` — match one param's gold vs arm item bags within tol → tp/fp/fn (item or number granularity)
+- **`score_attributes`** `L677` — grade descriptors on value-MATCHED pairs only — the matched set and the gold denominator shrink together, which is why the attribute axis is near-invariant to the compound-aware flip
 
-  ↔ _interacts with:_ `allparam_arms/<arm>/*.json`, `the hand gold JSON`, `score_by_dbsource.py`, `build_dashboard.py`
+  ↔ _interacts with:_ `allparam_arms/<arm>/*.json`, `the hand gold JSON`, `score_by_dbsource.py`, `build_dashboard.py`, `lora_training_v108/score_all_params_v2.py (SEPARATE file — val selection stays compound-blind)`
 
 #### `run_eval_generation.py`
-GPU stage: load NuExtract-2.0-8B 4-bit (+ optional LoRA adapter), greedy-decode one completion per prompt; run with/without --adapter for arm vs stock.
+GPU stage: load NuExtract3 in 4-bit (+ optional LoRA adapter), greedy-decode one completion per prompt; run with/without --adapter for arm vs stock. NuExtract-2.0-8B is RETIRED — a v2 base under a v5_reviewed adapter fails with lora_A/lora_B size mismatches.
 
-- **`main`** `L73` — load model+adapter, render + batch-generate, write predictions JSONL (resumable)
-- **`generate_batch`** `L171` — greedy decode (do_sample=False) a batch of prompts — reproducible, no sampling noise
-- **`load_done_keys`** `L58` — resume support: skip prompts already generated
+- **`main`** `L132` — resolve the base model from the adapter's adapter_config.json (else numind/NuExtract3), load model+adapter, render + batch-generate, write predictions JSONL
+- **`scan_resume_state`** `L61` — safe resume: collect already-generated keys, repair a truncated tail line left by a hard kill, and REFUSE a resume that would mix batch sizes (padding width changes numerics)
+- **`split_nuextract3_prompt_envelope`** `L107` — split the pipeline prompt into the NuExtract3 template/context envelope; a missing marker raises rather than silently mis-rendering
+- **`generate_batch`** `L303` — greedy decode (do_sample=False) a batch of prompts — reproducible, no sampling noise
 
   ↔ _interacts with:_ `final_adapter/ (from s7)`, `eval prompts JSONL`, `predictions JSONL`
 
@@ -1300,17 +1301,17 @@ Arm A: one prompt per (gold row × compound) via the SAME builder training + liv
 #### `build_eval_prompts_armb.py`
 Arm B: slice-shaped prompts that reproduce the arm-B TRAINING prompt exactly (FIELD_GROUP_* templates, no vsrc, no few-shot) so eval isn't measuring a train/infer mismatch.
 
-- **`build_gold_alias_map`** `L118` — map slice compound names to gold compounds via paren/salt variants
-- **`resolve_compound`** `L161` — pick the right gold compound for a slice by field-count rule
+- **`build_gold_alias_map`** `L125` — map slice compound names to gold compounds via paren/salt variants
+- **`resolve_compound`** `L168` — pick the right gold compound for a slice by field-count rule
 
   ↔ _interacts with:_ `prompts.FIELD_GROUP_ABSORPTION/_DISTRIBUTION/_ELIMINATION`, `finetune/build_armB_slice_training.py`, `build_oracle_manifest.py (--manifest)`
 
 #### `merge_armb_predictions.py`
 Union arm B's three per-ADME-slice predictions into ONE object per compound — mandatory, or the scorer keeps only the last and recall caps near a third.
 
-- **`parse_completion`** `L80` — parse a generation completion JSON string into an object
+- **`parse_completion`** `L81` — parse a generation completion JSON string into an object
 - **`_salvage_json`** `L42` — recover a truncated/dirty completion into valid JSON
-- **`main`** `L110` — group the 3 slice predictions per compound and union their families
+- **`main`** `L111` — group the 3 slice predictions per compound and union their families
 
   ↔ _interacts with:_ `preds_to_armdir.py`, `score_range_capture.py`
 
@@ -1331,7 +1332,7 @@ Carve the hand gold into table-derived / narrative-derived subsets by each item'
   ↔ _interacts with:_ `score_all_params_v2.py (--gold)`, `out/gold_table.json`
 
 #### `score_by_dbsource.py`
-Per-db_source breakdown reusing score_all_params_v2's EXACT functions so numbers match the headline; read RECALL (subset precision confounded).
+Per-db_source breakdown reusing score_all_params_v2's EXACT functions; read RECALL (subset precision confounded). Deliberately NOT flipped by FIX8 — it hardcodes `row_bags(row, False)` (compound-blind) and has other importers, so its numbers sit on the legacy lens.
 
 - **`fam`** `L14` — collapse SmPC section variants into one db_source family
 - **`main`** `L27` — bucket each gold row by db_source and score each bucket via the imported scorer
@@ -1361,12 +1362,37 @@ Cluster orchestrators wiring the generate → merge → marshal → score chain 
   ↔ _interacts with:_ `run_eval_generation.py`, `merge_armb_predictions.py`, `preds_to_armdir.py`, `score_all_params_v2.py`
 
 **Invariants / honesty rules**
+- COMPOUND-AWARE (optimal assignment) is the DEFAULT headline metric since 2026-08-31 (FIX8). The row-pooled row×param 'routed' lens is the OPT-OUT (`--no-compound-aware`), reproduces the pre-flip numbers byte-exact, and is a DIFFERENT metric definition — not a knob to average. `--compound-aware` is now accepted as a no-op so the ~20 `eval_*.sh` entrypoints keep working unmodified.
+- Do NOT reach for `--compound-align greedy`. The pre-FIX8 greedy NAME aligner is SUPERSEDED: it scores curated_v4_deploy at 0.761 where the published figure is 0.712, and it merges two compounds sharing a name so `dedup_items` destroys a real gold item (gold total 924 → 923; row 2753 lists "Mycophenolic acid" twice, 7640 repeats a name too). A fixture pins this.
+- Gold totals differ by CONVENTION, not by content: **924** compound-aware (TP 702 + FN 222, uniform across all 59 full-coverage arms) vs **913** row-pooled. Every pre-flip gold39 figure in SCORING_EVOLUTION.md carries a `[legacy-scored: compound-blind]` stamp — 74 dated entries. Numbers were not altered anywhere; only the ruler changed.
+- Reading the 86-arm compound-aware rescore: filter on `rows_scored`, **NEVER** on `gold_total`. 27 of 86 arms are partial-coverage; `gold39_specialists_recall_cp_C` tops the raw ranking at 0.7428 on 36/37 rows with a `gold_total` of 924 — IDENTICAL to v4's — so the equal denominator reads as reassuring while the real difference is FP exposure.
 - --exclude-rows 2501: row 2501 is in BOTH the training corpus AND the eval gold (a 1-row leak) — always excluded from a scored eval.
-- compound-aware vs routed (row×param) is a DIFFERENT metric definition, not a knob to average — the two full-gold lenses are separate comparable groups.
-- Eval sets are not mutually comparable (synthetic ~0.84–0.96 F1 vs real hand gold ~0.25–0.79); a cross-set delta is never presented as progress.
+- Rows with more than 8 compounds fall back to greedy alignment and are PRINTED, never silently degraded (gold39's worst row has 7; on the 86-arm rescore only `armA_final` tripped it, on rows 6434 and 2753).
+- Checkpoint/val SELECTION is deliberately NOT flipped. `eval_checkpoints.py` and `train_lora.py` import `lora_training_v108/score_all_params_v2.py` — a DIFFERENT 665-line file from this 803-line eval scorer — which stays compound-blind by owner call, so in-flight seed/variant runs remain comparable.
+- Eval sets are not mutually comparable (synthetic ~0.84–0.96 F1 vs the real hand gold); a cross-set delta is never presented as progress.
 - Arm B's three per-slice predictions MUST be merged before scoring or recall silently caps near one-third (merge_armb_predictions.py).
-- Eval prompts are built by the SAME builder as training/inference, so a number reflects the model, not prompt drift.
+- Eval prompts are built by the SAME builder as training/inference, so a number reflects the model, not prompt drift. **Two env vars are load-bearing and default to the WRONG value for a reproduction:** `TABLE_PREFERRED` (`merge_armb_predictions.py:152`, defaults to `AUC,Cmax`) and `CAPTURE_FORMULATION_RELEASE` (`build_eval_prompts_armb.py:58-59`, defaults OFF). Calling `eval_specialists_gold39.sh` bare silently accepts both and produces a measurably different arm — ~0.03-0.04 F1 low — with no warning. Set `TABLE_PREFERRED="AUC,Cmax,Tmax,CL,t_half"` and `CAPTURE_FORMULATION_RELEASE=1` explicitly. This has now burned two separate arms (v4 and v5).
 - On a filtered-gold subset (category / db_source) precision is confounded — read RECALL.
+
+### Measurement · The compound-aware flip — what the stricter ruler costs
+
+_2026-08-31 → 2026-09-01 · source: SCORING_EVOLUTION.md — 2026-08-31 compound-aware audit · 19:40 FIX8 flip · 19:45 attribute invariance · 20:05 86-arm rescore · 21:20 block-copy at scale · 2026-09-01 attribute tag-vocabulary census_
+
+No model, adapter, checkpoint, prediction or gold file changed — **only the ruler**. 37 rows, tol ±0.02, `--exclude-rows 2501 2566`.
+
+| arm | row-pooled (pre-2026-08-31 default) | compound-aware, optimal assignment (default since 2026-08-31) |
+|---|---|---|
+| candidate `v5rev_combo140_325` | **0.8417** (tp/fp/fn 691/38/222) | **0.7213** (695/308/229) |
+| deployed v4 `curated_v4_deploy` | **0.8630** (715/29/198) | **0.7120** (702/346/222) |
+| delta (candidate − v4) | **−0.0213** [−0.0717, +0.0122] | **+0.0094** [−0.0336, +0.0406] |
+
+- **Both arms lose 12–15 F1 points.** v4 loses more (−0.151) than the candidate (−0.120) because it misattributes more — false positives go 29 → 346 for v4 versus 38 → 308 for the candidate. v4's numeric edge does not survive the flip: the point estimate changes sign, but BOTH CIs span zero under BOTH conventions, so the two arms stay indistinguishable on numeric either way.
+- **The attribute (descriptor) axis barely moves:** candidate **0.718**, v4 **0.597** compound-aware — a **+12.1 point** descriptor gain that survives the stricter scorer and grows slightly. (No CI has been computed for the compound-aware delta; the published [+5.9, +17.5] belongs to the row-pooled +12.0.) Across the 59 full-coverage arms the numeric delta is mean −0.1439 (min −0.2375 / max −0.0044, uniformly negative) while the attribute delta is mean +0.0029, with only 4 of 59 arms exceeding |0.010|. This is structural, not luck: attributes score only on value-MATCHED pairs, so the matched set and the gold denominator shrink together (v4 attribute TP 1537 → 1511, −1.7%; attribute gold 3458 → 3404, −1.6%).
+- **Gold totals differ by convention:** **924** compound-aware, **913** row-pooled.
+- **The penalty is misattribution, not noise.** ~90% of compound-aware false positives match a SIBLING compound's gold in the same row (candidate 271/308, v4 317/346), and **74–76%** are byte-identical per-parameter block copies (candidate 229/308, v4 263/346) — detectable by string comparison, no model needed.
+- **There is no usable “too many compounds” rule.** False positives per gold item run 0.059 (candidate) / 0.047 (v4) at ONE compound and jump to **0.368 / 0.371 at TWO**, roughly doubling again at 5+. A “compounds > X” guideline would therefore need X = 1 — i.e. never on a multi-compound document, which is 13 of the 37 gold39 rows.
+- **Block copying is a BASE-MODEL behaviour, not something training introduced.** On the 2026-08-31 detector run the untrained `stock_nuextract3_nolora_C` emitted **31** distinct copied blocks at full 37/37 coverage — more than any trained arm in the ranking (max 23) — so training partially SUPPRESSES the behaviour rather than causing it. Consistent with the copy pattern being absent from the training targets. (Per-arm block COUNTS are as-of 2026-08-31: the detector's gold-side name-keying was corrected on 2026-09-01 and flagged-block totals moved, so treat the count as dated and the direction of the finding as the durable part.)
+- **The candidate is reproducible — but only with two env vars set explicitly.** `v5rev_combo140_325` rebuilds from absorption ckpt-140 / distribution ckpt-325 / elimination ckpt-680 on `numind/NuExtract3` **exactly**: |ΔF1| = **0.000000**, tp/fp/fn 695/308/229 on both sides, and **38 of 38 per-row prediction files byte-identical** to the reference. That holds ONLY when `TABLE_PREFERRED="AUC,Cmax,Tmax,CL,t_half"` and `CAPTURE_FORMULATION_RELEASE=1` are supplied. Calling `eval_specialists_gold39.sh` bare silently takes `TABLE_PREFERRED=AUC,Cmax` and leaves `CAPTURE_FORMULATION_RELEASE` OFF, which builds a measurably different arm (0.6839–0.6907) and looks like a failed reproduction. Two earlier regenerations hit exactly this and briefly read as "the recipe does not rebuild the artifact" — they shared a script, so they shared both defects and were never independent. That reading is **retired**. The identical trap was already on record for v4 and was not connected to v5 because it had been written up about a different arm.
 
 ---
 
@@ -1769,7 +1795,7 @@ The all-parameter scorer broken out per PK parameter, sorted by gold volume, for
 
 ### Full gold · routed (non-compound-aware)
 
-`real_gold_38row::routed_noca_tol02_2026-07-29` — The ledger FULL SCORING BOARD headline lens — anneal_C 0.792 (new best full-gold).
+`real_gold_38row::routed_noca_tol02_2026-07-29` — **[legacy-scored: compound-blind]** — this board predates the 2026-08-31 FIX8 flip. Compound-aware with optimal assignment is now the gold39 DEFAULT; every figure here is the `--no-compound-aware` row-pooled lens and is NOT the current headline. Under the current default both deployment arms lose 12–15 F1 (v4 `curated_v4_deploy` 0.8630 → 0.7120, candidate `v5rev_combo140_325` 0.8417 → 0.7213) and the gold total is 924, not 913. 74 dated SCORING_EVOLUTION.md entries carry the same stamp. The ledger FULL SCORING BOARD headline lens — anneal_C 0.792 (new best full-gold).
 
 _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 2501_
 
@@ -1791,7 +1817,7 @@ _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 
 
 ### Production winner · hybrid_C + dim guard
 
-`real_gold_38row::routed_noca_tol02_2026-08-03` — Fresh scorer run reproduced the frozen production headline: P 0.950 / R 0.744 / F1 0.834, TP/FP/FN 679/36/234, misattr 4. The manual "industrial" comparator is an evidence oracle, NOT a prediction arm: non-leak manual evidence is 962/962 exact raw substrings, with 418/962 approximate-review reconciliations.
+`real_gold_38row::routed_noca_tol02_2026-08-03` — **[legacy-scored: compound-blind]** — this board predates the 2026-08-31 FIX8 flip. Compound-aware with optimal assignment is now the gold39 DEFAULT; every figure here is the `--no-compound-aware` row-pooled lens and is NOT the current headline. Under the current default both deployment arms lose 12–15 F1 (v4 `curated_v4_deploy` 0.8630 → 0.7120, candidate `v5rev_combo140_325` 0.8417 → 0.7213) and the gold total is 924, not 913. 74 dated SCORING_EVOLUTION.md entries carry the same stamp. Fresh scorer run reproduced the frozen production headline: P 0.950 / R 0.744 / F1 0.834, TP/FP/FN 679/36/234, misattr 4. The manual "industrial" comparator is an evidence oracle, NOT a prediction arm: non-leak manual evidence is 962/962 exact raw substrings, with 418/962 approximate-review reconciliations.
 
 _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 2501; production hybrid_C adapters plus the all-dimensional unit guard_
 
@@ -1813,7 +1839,7 @@ _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 
 
 ### Latest candidates · granular re-picks vs deployed (2026-08-05)
 
-`real_gold_38row::routed_noca_tol02_2026-08-05` — Latest granular checkpoint-hunt board (2026-08-05), directly comparable. v3 granular 0.859 (NuExtract3, abs-725/dist-250/elim-475) is the BEST measured but on a different base than the deployed winner → integration change, still a CANDIDATE; production stays 0.834. v2 granular 0.811 (2026-08-05, NuExtract-2.0-8B = the DEPLOYED/promotable base, a400/d525/e1275) tried to beat the winner via granular checkpoint selection (dist+elim beat the winner on VAL) but the merged gold39 RECALL dropped 0.744→0.711 — 4th confirmation that per-arm val gains don't transfer → CLOSED NEGATIVE. So on the promotable base the deployed winner (0.834) remains best; the remaining lever is table re-mining (better training DATA, not checkpoint selection). Arc: SCORING_EVOLUTION.md 2026-08-05 / 2026-08-04.
+`real_gold_38row::routed_noca_tol02_2026-08-05` — **[legacy-scored: compound-blind]** — this board predates the 2026-08-31 FIX8 flip. Compound-aware with optimal assignment is now the gold39 DEFAULT; every figure here is the `--no-compound-aware` row-pooled lens and is NOT the current headline. Under the current default both deployment arms lose 12–15 F1 (v4 `curated_v4_deploy` 0.8630 → 0.7120, candidate `v5rev_combo140_325` 0.8417 → 0.7213) and the gold total is 924, not 913. 74 dated SCORING_EVOLUTION.md entries carry the same stamp. Latest granular checkpoint-hunt board (2026-08-05), directly comparable. v3 granular 0.859 (NuExtract3, abs-725/dist-250/elim-475) is the BEST measured but on a different base than the deployed winner → integration change, still a CANDIDATE; production stays 0.834. v2 granular 0.811 (2026-08-05, NuExtract-2.0-8B = the DEPLOYED/promotable base, a400/d525/e1275) tried to beat the winner via granular checkpoint selection (dist+elim beat the winner on VAL) but the merged gold39 RECALL dropped 0.744→0.711 — 4th confirmation that per-arm val gains don't transfer → CLOSED NEGATIVE. So on the promotable base the deployed winner (0.834) remains best; the remaining lever is table re-mining (better training DATA, not checkpoint selection). Arc: SCORING_EVOLUTION.md 2026-08-05 / 2026-08-04.
 
 _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 2501; all three arms scored in ONE call vs the same gold (merged TABLE_PREFERRED + dimension guard)._
 
@@ -1835,7 +1861,7 @@ _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 
 
 ### Full gold · compound-aware
 
-`real_gold_38row::compound_aware_tol02_2026-07-29` — build_dashboard.py's validated default lens — more conservative on multi-compound rows.
+`real_gold_38row::compound_aware_tol02_2026-07-29` — **[superseded lens — pre-FIX8 greedy aligner]** — this board came from the OLD `--compound-aware` flag, which paired compounds by greedy NAME matching. Since 2026-08-31 the default is compound-aware by OPTIMAL ASSIGNMENT and the greedy path survives only as `--compound-align greedy`. The two disagree materially: greedy scores `curated_v4_deploy` at 0.761 where the published optimal figure is 0.712, and it merges two compounds sharing a name so dedup destroys a real gold item (924 → 923). Do NOT read this board as the current default. build_dashboard.py's validated default lens — more conservative on multi-compound rows.
 
 _score_all_params_v2 --compound-aware ((compound,param) bags), tol ±0.02, exclude 2501_
 
@@ -1857,7 +1883,7 @@ _score_all_params_v2 --compound-aware ((compound,param) bags), tol ±0.02, exclu
 
 ### Table subset · arm-B regime
 
-`real_gold_table::armB_noca_tol02_2026-07-29` — The 18 table-derived rows — where count-priming lives (Ehaiku 0.883).
+`real_gold_table::armB_noca_tol02_2026-07-29` — **[legacy-scored: compound-blind]** — this board predates the 2026-08-31 FIX8 flip. Compound-aware with optimal assignment is now the gold39 DEFAULT; every figure here is the `--no-compound-aware` row-pooled lens and is NOT the current headline. Under the current default both deployment arms lose 12–15 F1 (v4 `curated_v4_deploy` 0.8630 → 0.7120, candidate `v5rev_combo140_325` 0.8417 → 0.7213) and the gold total is 924, not 913. 74 dated SCORING_EVOLUTION.md entries carry the same stamp. The 18 table-derived rows — where count-priming lives (Ehaiku 0.883).
 
 _score_all_params_v2 --gold gold_table.json (non-compound-aware), tol ±0.02, exclude 2501_
 
