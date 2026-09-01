@@ -1790,8 +1790,30 @@ The all-parameter scorer broken out per PK parameter, sorted by gold volume, for
 
 | Target | Applies to | Metric | Caveat |
 |---|---|---|---|
-| Claude Sonnet (teacher) | fullgold_routed, production_winner_20260803, fullgold_ca, table | teacher P/R/F1 on independent hand gold | ROUGH CEILING only — Sonnet (the distillation teacher) was scored on the INDEPENDENT hand gold (gold_fair_pruned.json, 26 rows), a DIFFERENT denominator from this lens. Read it as an aspirational target, not a same-gold bar. |
+| Claude Sonnet (teacher) | fullgold_ca_optimal_20260831, fullgold_routed, production_winner_20260803, latest_candidates_20260805, fullgold_ca, table | teacher P/R/F1 on independent hand gold | ROUGH CEILING only — Sonnet (the distillation teacher) was scored on the INDEPENDENT hand gold (gold_fair_pruned.json, 26 rows), a DIFFERENT denominator from this lens. Read it as an aspirational target, not a same-gold bar. |
 | Industrial raw-source evidence target | fullgold_routed, production_winner_20260803 | raw exact-substring coverage | Manual raw-source comparator: 962/962 non-leak fact slices have exact raw substrings. This is an evidence oracle / pass0-vsrc comparator, not a blind prediction arm and not a P/R/F1 score. The overlay marks source-evidence availability on the same 0-1 axis. |
+
+### Full gold · compound-aware, optimal assignment (CURRENT DEFAULT)
+
+`real_gold_38row::compound_aware_optimal_tol02_2026-08-31` — The only board here on the CURRENT metric. Compound-awareness costs every arm 12–15 F1 versus the row-pooled boards below, and the two are NOT comparable — a value filed under the wrong compound is now charged as a false positive. FULL-COVERAGE ARMS ONLY (37/37): 27 of the 86 rescored arms are partial and are excluded, because `gold_total` is 924 for them too and so cannot be used to spot them — filter on `rows_scored`. Sonnet 4.6 and GPT-5.6 sit at 36/37 and are therefore absent from this board; their compound-aware figures are in ↗ Benchmark. NAMING CAVEAT, unresolved: the published deployed-v4 figure 0.7120 (702/346/222) reproduces here under `curated_v4_gf_C` / `curated_v4_abs875_C`, and matches the ledger audit's per-row worst cases on 4/4 probed rows — but the dir named `curated_v4_deploy_C` scores 0.7082 (694/342/230). The number is sound; which directory is "deployed v4" is not. Provenance + the full reconciliation: `_build/stage_ca_board.py`.
+
+_score_all_params_v2 DEFAULT since 2026-08-31 (FIX8): compound-aware, optimal assignment, (compound,param) bags, tol ±0.02, exclude 2501 + 2566; 37 rows, gold total 924_
+
+| Parameter | Gold n | curated_v4_gf_C F1 | curated_v4_abs875_C F1 | curated_v4_deploy_C F1 | curated_v4_deploy_gf_C F1 | remined_v3_C F1 | curated_v3_deploy_C F1 | curated_v3_C F1 | gold39_specialists_hybrid_C_dimguard F1 | gold39_specialists_C F1 | stock_nuextract3_nolora_C F1 | anneal_C F1 | gold39_C F1 | soup_C F1 | stock_nuextract2_nolora_C F1 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `AUC` | 255 | 0.691 | 0.691 | 0.659 | 0.659 | 0.648 | 0.659 | 0.626 | 0.631 | 0.597 | 0.659 | 0.579 | 0.573 | 0.568 | 0.000 |
+| `Cmax` | 160 | 0.593 | 0.593 | 0.614 | 0.614 | 0.667 | 0.599 | 0.610 | 0.559 | 0.589 | 0.561 | 0.535 | 0.496 | 0.494 | 0.000 |
+| `t_half` | 113 | 0.791 | 0.791 | 0.776 | 0.776 | 0.739 | 0.785 | 0.785 | 0.798 | 0.764 | 0.714 | 0.637 | 0.598 | 0.558 | 0.000 |
+| `Tmax` | 82 | 0.642 | 0.642 | 0.642 | 0.642 | 0.670 | 0.614 | 0.643 | 0.547 | 0.537 | 0.555 | 0.418 | 0.411 | 0.407 | 0.000 |
+| `CL` | 75 | 0.783 | 0.783 | 0.748 | 0.748 | 0.775 | 0.740 | 0.740 | 0.700 | 0.689 | 0.736 | 0.702 | 0.727 | 0.698 | 0.000 |
+| `urine_elim` | 54 | 0.755 | 0.755 | 0.768 | 0.768 | 0.731 | 0.735 | 0.735 | 0.774 | 0.733 | 0.394 | 0.667 | 0.690 | 0.614 | 0.000 |
+| `Vd` | 50 | 0.939 | 0.939 | 0.980 | 0.980 | 0.835 | 0.939 | 0.939 | 0.905 | 0.909 | 0.903 | 0.897 | 0.842 | 0.897 | 0.000 |
+| `PPB` | 50 | 0.903 | 0.903 | 0.925 | 0.925 | 0.876 | 0.905 | 0.905 | 0.879 | 0.857 | 0.759 | 0.822 | 0.779 | 0.809 | 0.000 |
+| `F` | 49 | 0.800 | 0.800 | 0.822 | 0.822 | 0.818 | 0.835 | 0.826 | 0.870 | 0.795 | 0.691 | 0.753 | 0.795 | 0.767 | 0.000 |
+| `fecal_elim` | 20 | 0.789 | 0.789 | 0.789 | 0.789 | 0.744 | 0.857 | 0.857 | 0.864 | 0.700 | 0.625 | 0.800 | 0.800 | 0.800 | 0.000 |
+| `time_to_steady_state` | 9 | 0.167 | 0.167 | 0.167 | 0.167 | 0.167 | 0.167 | 0.167 | 0.000 | 0.000 | 0.167 | 0.000 | 0.000 | 0.000 | 0.167 |
+| `accumulation_ratio` | 5 | 0.222 | 0.222 | 0.222 | 0.222 | 0.222 | 0.222 | 0.222 | 0.000 | 0.000 | 0.222 | 0.000 | 0.000 | 0.000 | 0.222 |
+| `bile_elim` | 2 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.500 | 0.667 | 0.667 | 0.667 | 0.500 | 0.500 | 0.000 |
 
 ### Full gold · routed (non-compound-aware)
 
@@ -1843,7 +1865,7 @@ _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 
 
 _score_all_params_v2, row×param bags (non-compound-aware), tol ±0.02, exclude 2501; all three arms scored in ONE call vs the same gold (merged TABLE_PREFERRED + dimension guard)._
 
-| Parameter | Gold n | v3 granular a725/d250/e475 (NuExtract3, candidate best) F1 | gold39_specialists_hybrid_C_dimguard (deployed) F1 | v2 granular a400/d525/e1275 (NuExtract-2.0-8B) F1 |
+| Parameter | Gold n | gold39_v3_recall_a725_d250_e475_C F1 | gold39_specialists_hybrid_C_dimguard F1 | gold39_v2gran_a400_d525_e1275_C F1 |
 |---|---:|---:|---:|---:|
 | `AUC` | 252 | 0.885 | 0.815 | 0.785 |
 | `Cmax` | 158 | 0.848 | 0.849 | 0.854 |
@@ -1873,8 +1895,8 @@ _score_all_params_v2 --compound-aware ((compound,param) bags), tol ±0.02, exclu
 | `Tmax` | 82 | 0.609 | 0.451 | 0.450 | 0.446 | 0.542 | 0.534 | 0.539 | 0.534 | 0.504 | 0.526 | 0.473 | 0.346 | 0.393 | 0.253 | 0.459 | 0.491 |
 | `CL` | 75 | 0.694 | 0.756 | 0.766 | 0.736 | 0.711 | 0.700 | 0.620 | 0.637 | 0.690 | 0.727 | 0.625 | 0.672 | 0.632 | 0.419 | 0.305 | 0.222 |
 | `urine_elim` | 53 | 0.740 | 0.673 | 0.696 | 0.619 | 0.743 | 0.738 | 0.722 | 0.743 | 0.693 | 0.679 | 0.740 | 0.717 | 0.710 | 0.528 | 0.506 | 0.273 |
-| `PPB` | 50 | 0.867 | 0.844 | 0.800 | 0.832 | 0.864 | 0.864 | 0.870 | 0.851 | 0.837 | 0.826 | 0.837 | 0.800 | 0.796 | 0.727 | 0.564 | 0.557 |
 | `Vd` | 50 | 0.898 | 0.897 | 0.842 | 0.897 | 0.872 | 0.872 | 0.872 | 0.872 | 0.837 | 0.809 | 0.805 | 0.804 | 0.784 | 0.709 | 0.682 | 0.691 |
+| `PPB` | 50 | 0.867 | 0.844 | 0.800 | 0.832 | 0.864 | 0.864 | 0.870 | 0.851 | 0.837 | 0.826 | 0.837 | 0.800 | 0.796 | 0.727 | 0.564 | 0.557 |
 | `F` | 49 | 0.814 | 0.771 | 0.814 | 0.776 | 0.800 | 0.756 | 0.841 | 0.762 | 0.814 | 0.828 | 0.828 | 0.674 | 0.606 | 0.706 | 0.394 | 0.318 |
 | `fecal_elim` | 20 | 0.700 | 0.800 | 0.800 | 0.800 | 0.800 | 0.800 | 0.857 | 0.800 | 0.829 | 0.826 | 0.857 | 0.667 | 0.667 | 0.540 | 0.750 | 0.743 |
 | `time_to_steady_state` | 9 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.261 | 0.000 | 0.000 |
