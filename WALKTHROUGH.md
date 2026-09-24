@@ -18,6 +18,7 @@ This document walks the full journey a regulator drug label takes to become an M
 | S8 | **Evaluate** | `lora_eval` | `score_all_params_v2.py` | final_adapter/ (PEFT LoRA) · hand gold (wip_gold_claude_set.json) → allparam_arms/<arm>/*_pred.json · out/*.json (P/R/F1 + by_param) |
 | S9 | **Enrich & flatten** | `prototype_silver` | `common.py` | extraction values · compound_identity → silver_merged.json · out/ml/*.csv (label_ready) |
 | S10 | **Agent operating pattern** | `agent_pattern` | `README.md` | CLAUDE.md session contract · .claude/hooks/*.py policy layer · WORKING_STATE.md / MASTER_TODO.md / FORK_OWNERSHIP.tsv → README.md - the field report · architecture.svg - control loop + pipeline panels · TEMPLATES.md - copyable starter kit |
+| S11 | **Structure→PK baseline** | `structure_pk_baseline` | `build_baseline.py` | v6 PKV corpus (armb_v6_pkv_long_20260923.csv) + v6_curated_20260904/pool_armB_*.jsonl · pchem_roadmap / chembl_36 2D physchem descriptors (+ RDKit-from-SMILES fallback) → {target}_baseline_dataset + _report (protein_binding/half_life/volume_of_distribution) · v6_curated_20260904/pool_armB_*.jsonl -- hl_type slot written into t_half items |
 
 ### The DB-table hand-off spine
 
@@ -1645,6 +1646,192 @@ Per-axis comparison against the agent frameworks, including an explicit section 
 - No completion claim without re-opening the artifact and pasting the real command output. Counts come from a real parse; negatives carry their scope.
 - Every tabular deliverable ships as csv AND xlsx, and the human edits only the xlsx - Excel on a cp1252 install silently replaces characters it lacks, which is semantic corruption of gold data, not cosmetics.
 - Numbers are cited with their source file; where two sources disagreed (deployed numeric F1 0.863 vs the older arm-A 0.834) both are named rather than silently reconciled.
+
+---
+
+## S11 · Structure→PK baseline — v6 PKV corpus + physchem descriptors  →  GBM baseline + hl_type labels back into the pool
+
+> Physchem->PK baseline + hl_type phase curation into v6 pool + merged MMPK scaffold
+
+**Repo:** `structure_pk_baseline`  ·  **Source dir:** `structure_pk_baseline/`  
+
+**God node:** `build_baseline.py` — It is the namespace's shared Stage-1 machinery, imported verbatim (`import build_baseline as bb`) by curation_layer.py, compound_median_check.py, curation_phase_variants_20260924.py and p2_eval_harness.py, which all reuse its compound-identity join (load_physchem_crosswalk, load_chembl36_fallback, build_general_export), its compound_key/compound_level_split (the compound-level-not-document-level split every downstream script depends on), FEATURE_COLS, TARGET_CONFIGS and passes_healthy_route_filter rather than reimplementing any of them. Even though the most recent flurry of activity (Steps 27-35 of the chronological trace) is concentrated in the hl_type pool-patching scripts, those operate on the JSONL pool directly and are themselves fed by curation_phase_variants_20260924.py, which still goes through build_baseline.py for the join -- so it remains the true anchor for the CURRENT state, confirming the task's own AST-bridge choice rather than displacing it with curation_layer.py or the MMPK scaffold.
+
+structure_pk_baseline/ trains a HistGradientBoostingRegressor on 13 RDKit/ChEMBL 2D physchem descriptors to predict protein_binding, half_life, and volume_of_distribution from the v6 PKV corpus (training_json_prototype/armb_v6_pkv_long_20260923.csv, 33,761 rows), joining through a three-stage compound-identity cascade in build_baseline.py::resolve_row (pchem_roadmap.compound_canonical -> the full chembl_36 mirror -> RDKit computed directly from the row's own SMILES, no DB at all). A second thread, curation_layer.py, layers an MMPK-paper-inspired filter/stratification/consolidation pass on top of the same Stage-1 join (passes_mmpk_criteria, stratum_key, consolidate), producing half_life/vd_apparent/vd_real curated datasets plus a within-compound log-SD headline metric (L0/L1/L2). In parallel, a half-life-type (hl_type) curation effort spanning hl_type_recovery_apply_20260923.py, apply_value_reextract_hl_type_20260924.py, hl_type_normalize_v109_20260924.py and the template/review scripts recovers and normalizes half-life phase labels (terminal/distribution/absorption/effective/intermediate/post_induction) from old pool snapshots and a cluster-run per-value re-extraction, then writes them directly into the live v6_curated_20260904/pool_armB_*.jsonl training pool's t_half slots (3,451 labels as of Step 35) -- the only place this stage writes back into the shared v6 training data. p2_eval_harness.py re-scores all of it under a proper MMPK-style 10-fold skeleton-grouped CV with GMFE/RMSLE/AFE metrics plus an external test against 112 MMPK investigational compounds absent from the corpus. mmpk_external/mmpk/ is a merged-in scaffold of the published MMPK reference architecture (mmpk_tier1.py: a GBM 'Tier-1' baseline on NCATS FRDB oral-PK data with RDKit+ECFP4 features; tier2/train_tier2.py: an unrun multimodal GINE+ChemBERTa 'Tier-2' net), kept as an architecture/validation reference, never pooled into training. As of Step 35, protein_binding shows real held-out signal (test R2 ~0.51-0.52) but half_life and volume_of_distribution show no reliable physchem-only signal at any grain, row-level or compound-median -- a negative result cross-checked against published literature and attributed to label scale/curation rather than descriptor choice, with the hl_type phase split measurably tightening label agreement and external transfer (MMPK t1/2 log r 0.91->0.95) without rescuing the in-corpus model fit.
+
+**Reads**
+- `training_json_prototype/armb_v6_pkv_long_20260923.csv (v6 PKV corpus, 33,761 rows, flattened from v6_curated_20260904/pool_armB_*.jsonl)` (file; from s9)
+- `v6_curated_20260904/pool_armB_{absorption,distribution,elimination}_v6_curated.{train,val,test}.jsonl (live v6 training pool, current state)` (file; from s9)
+- `v6_curated_20260904/archive_pre_20260909/pool_backups/*.bak_before_identity_findings and *.bak_before_corpuswide_pruning (earliest pre-cleaning v6 snapshots, 2026-09-04/09-07)` (file; from s9)
+- `hl_type_value_reextract_cluster_bundle/results/shard_*.jsonl (cluster-run per-value hl_type re-extraction job output)` (file; from external cluster job)
+- `pchem_roadmap.compound_canonical / physchem (curated 2D descriptor crosswalk)` (db_table; from external DB-backed project (not owned by this pipeline))
+- `chembl_36 (full 2.86M-row ChEMBL mirror: molecule_dictionary, compound_structures, compound_properties)` (db_table; from external DB)
+- `Table S1 S2 Databasev1.xlsx (owner-supplied manuscript reference table, outside the repo)` (file; from external)
+- `mmpk_external/mmpk_data/ (Zenodo MMPK raw+model datasets, 10 trained fold checkpoints) and MariaDB mmpk schema` (file; from external (published MMPK reference, github.com/xli7654321/mmpk))
+
+**Writes**
+- `structure_physchem_pkv_join_20260923.csv/.xlsx (general Stage-1 joined export, all parameters)` (file; to s11 (self-contained research artifact))
+- `{parameter}_baseline_dataset_20260923.csv/.xlsx + _baseline_report_20260923.md (protein_binding/half_life/volume_of_distribution)` (file; to s11)
+- `{target}_curated_{20260923|20260924}.csv/.xlsx (curation_layer.py outputs: half_life/vd_apparent/vd_real, plus the 20260924 phase variants)` (file; to s11)
+- `manual_review_flagged*/manual_review_triage*/hl_type_*_review*.csv+xlsx (human-in-the-loop review sheets)` (artifact; to s11 (owner review, feeds back into the hl_type apply scripts))
+- `p2_cv_metrics/p2_oof_predictions/p2_external_mmpk_predictions/p2_summary_{tag}.csv/.xlsx/.json (P2 eval harness outputs)` (file; to s11)
+- `v6_curated_20260904/pool_armB_{absorption,distribution,elimination}_v6_curated.{train,val,test}.jsonl -- hl_type slot written into each t_half template item` (artifact; to s9 / main pipeline's shared training pool (consumed downstream by training/eval stages))
+- `pchem_roadmap.mmpk_dataset (assembled FRDB oral-PK rows, written by mmpk_tier1.py)` (db_table; to s11)
+- `mmpk/out/tier2_dataset.parquet (portable Tier-2 training table for the GPU box, no MySQL needed)` (file; to s11 (GPU arm, not yet run))
+- `mmpk/out/metrics_tier1.json (Tier-1 GBM OOF metrics)` (file; to s11)
+
+**DB tables**
+
+| Table | Mode | Writer |
+|-------|------|--------|
+| `pchem_roadmap.compound_canonical` | read | external DB-backed project (not owned by this pipeline) |
+| `pchem_roadmap.physchem` | read | external DB-backed project |
+| `pchem_roadmap.canonical_member / compound_master (FRDB-to-canonical bridge)` | read | external DB-backed project |
+| `pchem_roadmap.mmpk_dataset` | read/write | mmpk_external/mmpk/mmpk_tier1.py (assemble/main: DROP+CREATE+INSERT); read by mmpk_external/mmpk/tier2/export_tier2_data.py |
+| `chembl_36.molecule_dictionary / compound_structures / compound_properties` | read | external ChEMBL mirror |
+| `pharmacologie.chemoinfo_extracted` | read | external DB (chemoinfo extraction project) |
+| `lombardo_db.lombardo_human_pk_values` | read | external DB (Lombardo reference dataset) |
+| `mmpk.mmpk_raw_dataset` | read | external (MMPK Zenodo data loaded via the owner's mmpk_merge.ipynb) |
+| `drug_ncats.pk_raw` | read | external DB (NCATS FRDB) |
+| `raw_llm_txt.txt (row_id, db_source)` | read | external DB (main pipeline's raw-document store) |
+
+**Hand-off in:** Reads the main pipeline's own shared output pool: the v6 PKV long-table export (training_json_prototype/armb_v6_pkv_long_20260923.csv, itself flattened from v6_curated_20260904/pool_armB_*.jsonl by a script outside this stage) for PK values/SMILES/dose/route/population columns, plus the earliest pre-cleaning v6 pool snapshots (v6_curated_20260904/archive_pre_20260909/pool_backups/*) for hl_type phase recovery, and a separately cluster-run per-value re-extraction job's results (hl_type_value_reextract_cluster_bundle/results/). Structure/physchem data comes from a local MariaDB pchem_roadmap (fed by a separate DB-backed project this pipeline does not own) plus the full chembl_36 mirror, with RDKit computing descriptors directly from each row's own SMILES as a last-resort fallback with no DB dependency at all.
+
+**Hand-off out:** This is not a stage of the original 8-step linear extraction pipeline (Acquire->Clean->Prose->Extract->Distill->Convert->Fine-tune->Evaluate) -- like s9 'Enrich & flatten', it is a side-pipeline that reads that pipeline's shared output pool and writes one specific field back into it. Its only write into the main pipeline's shared data is the hl_type slot inside each half_life template block's t_half items in v6_curated_20260904/pool_armB_{absorption,distribution,elimination}_v6_curated.{train,val,test}.jsonl (3,451 labels as of Step 35), which the core pipeline's own training/eval stages consume directly as part of the shared v6 training pool. Everything else this stage produces (baseline datasets, curated CSVs, eval reports, MMPK scaffold outputs) stays inside structure_pk_baseline/ as a standalone ML-baseline research artifact, not consumed downstream by the linear pipeline.
+
+### Scripts & functions
+
+#### `build_baseline.py`
+Phase-0 baseline: joins v6 PKV rows to physchem descriptors, trains/evaluates a per-target HistGradientBoostingRegressor, writes the shared join + per-target datasets/reports. God node -- imported by 4 other scripts in this namespace.
+
+- **`load_physchem_crosswalk`** `L135` — Primary pchem_roadmap.compound_canonical -> physchem join, deduped by lowest internal_id per molregno.
+- **`load_chembl36_fallback`** `L167` — Fallback join against the full 2.86M-row chembl_36 mirror (same descriptor schema) when pchem_roadmap has no match.
+- **`rdkit_descriptors_from_smiles`** `L213` — Last-resort descriptor computation directly from the row's own SMILES via RDKit, no DB/network dependency.
+- **`resolve_row`** `L248` — Three-stage cascade resolver: cid/inchikey -> pchem_roadmap, then chembl_id/inchikey -> chembl_36, then RDKit from SMILES.
+- **`build_general_export`** `L325` — Builds the general joined export; excludes identity_conflicts rows and pipe-joined combo-drug rows.
+- **`compound_level_split`** `L417` — 70/15/15 compound-level (never document-level) train/val/test split, seed 42.
+
+  ↔ _interacts with:_ `training_json_prototype/armb_v6_pkv_long_20260923.csv`, `pchem_roadmap DB`, `chembl_36 DB`, `pharmacologie.chemoinfo_extracted`, `lombardo_db`, `manuscript xlsx`, `csv_encoding.py (read_text/to_xlsx)`, `imported by curation_layer.py, compound_median_check.py, curation_phase_variants_20260924.py, p2_eval_harness.py`
+
+#### `curation_layer.py`
+MMPK-paper-inspired curation layer on top of build_baseline's Stage-1 join: written filter config (M2), apparent/real Vd split (M3), dose/population stratification, consolidation, and label-spread (log-SD) headline metric.
+
+- **`passes_mmpk_criteria`** `L71` — MMPK-style inclusion filter: healthy/route/release (reused from build_baseline) plus plasma/serum/blood sample_origin.
+- **`dose_tier`** `L88` — Half-log10 dose bin in mg/kg via mmpk_tier1.conv_dose_mgkg (MMPK's 70kg convention, M4).
+- **`stratum_key`** `L114` — Groups rows by (compound, dose_tier, population_tier) for consolidation.
+- **`log_sd_by`** `L121` — Within-group SD of log(value); drives the L0/L1/L2 label-spread headline metric.
+- **`consolidate`** `L146` — Median-per-stratum consolidation; flags unexplained-spread groups (dose+population both unspecified, relative spread>1.0) for manual review instead of silent averaging.
+- **`curate`** `L282` — Driver: raw rows -> M2 filter -> consolidate -> writes {target}_curated_{tag} csv/xlsx; accepts an optional phase_keep hl_type filter.
+
+  ↔ _interacts with:_ `build_baseline.py (import bb)`, `mmpk_external/mmpk/mmpk_tier1.py (conv_dose_mgkg, reused not reimplemented)`, `mmpk.mmpk_raw_dataset DB`, `lombardo_db`, `manuscript xlsx`, `curation_phase_variants_20260924.py (imports cl)`
+
+#### `hl_type_recovery_apply_20260923.py`
+Recovers half-life phase (hl_type) labels that bled into other slot fields (status/vtype/notes) in the earliest v6 pool snapshot, and writes them onto the current pool's t_half slots.
+
+- **`classify`** `L98` — Phrase-rule classifier mapping free text onto the v109 hl_type vocabulary, with explicit false-positive exclusions (e.g. 'terminal renal failure').
+- **`recover`** `L132` — Scans the earliest .bak_before_identity_findings / .bak_before_corpuswide_pruning snapshots for phase-bearing slot fields.
+- **`decide`** `L158` — Per-slot decision: WRITE_hl_type / review_duplicate_slot_key / review_second_phase / review_conflicting_phases / META_analyte_only.
+- **`main`** `L172` — Matches recovered slots onto the current pool by (id_row, compound_name, val, min_val, max_val, unit), applies under --apply, byte-verifies the write.
+
+  ↔ _interacts with:_ `v6_curated_20260904/pool_armB_*.jsonl (write)`, `v6_curated_20260904/archive_pre_20260909/pool_backups/*`, `csv_encoding.py`, `imported by hl_type_normalize_v109_20260924.py (classify)`
+
+#### `apply_value_reextract_hl_type_20260924.py`
+Applies high-confidence, quote-grounded hl_type labels from a cluster-run per-value re-extraction job onto the live v6 pool, additive-only.
+
+- **`eligible`** `L100` — Selection gate: confidence==high, quote_grounded==True, no llm_error, no vocabulary/grounding flags.
+- **`unit_eq`** `L80` — Time-unit synonym comparison (h/hr/hours/heure(s) etc.) between the worklist and the live pool slot.
+- **`main`** `L116` — Applies candidates per (domain,split) file; skips slots that already carry hl_type or were deliberately emptied by the normalizer; backs up + byte-verifies.
+
+  ↔ _interacts with:_ `hl_type_value_reextract_cluster_bundle/results/shard_*.jsonl`, `v6_curated_20260904/pool_armB_*.jsonl (write)`, `hl_type_normalize_v109_20260924.py (must always run after this script)`
+
+#### `hl_type_normalize_v109_20260924.py`
+Folds the wider re-extraction hl_type vocabulary down to v109's fixed 6-label set (terminal/distribution/absorption/effective/intermediate/post_induction), idempotently.
+
+- **`decide`** `L97` — Direct maps (elimination/gamma/lambda_z->terminal, alpha/initial->distribution, accumulation->effective), beta->terminal or intermediate by triphasic context, analyte removal, else phrase-rule resolution from evidence quote.
+- **`evidence_for`** `L79` — Pulls the re-extraction's per-slot evidence quote only (never its reasoning text, which recites the whole label list).
+- **`main`** `L118` — Idempotent pass over all 9 pool files; aborts with nothing written if a pool file changed mid-run (concurrency guard).
+
+  ↔ _interacts with:_ `v6_curated_20260904/pool_armB_*.jsonl (write)`, `hl_type_recovery_apply_20260923.py (imports classify)`, `apply_value_reextract_hl_type_20260924.py's output (reads meta.hl_type_value_reextract_20260924)`
+
+#### `v6_template_hl_type_slot_20260923.py`
+One-time pass adding the missing "hl_type" slot to every prompt's t_half template block (the v6 Template never had it, though the prompt already instructed the extractor to fill it).
+
+- **`split_template`** `L41` — Round-trip-safe extraction of the JSON template text after '# Template:'.
+- **`add_slot`** `L52` — Adds hl_type via v109's own prompts.apply_half_life_type_slot (imported, not reimplemented); skips empty/odd slots and non-round-trippable templates.
+
+  ↔ _interacts with:_ `v6_curated_20260904/pool_armB_*.jsonl (write, prompt only)`, `pk_new_nu_model_v109/prompts.py::apply_half_life_type_slot (reused)`
+
+#### `v6_template_extend_families_20260924.py`
+Extends per-record templates for PKV families the completion carries but the record's own template omits (t_half, time_to_steady_state, accumulation_ratio, AUC/Tmax/Cmax), gated on grounding.
+
+- **`family_grounded`** `L54` — Grounding gate: every val/min_val/max_val of the family's items must appear verbatim (number or EN/FR word) in the record's own Context before extension is allowed.
+- **`main`** `L75` — Copies a compatible slot-schema variant from another template already listing the family; skips ungrounded or non-round-trippable records.
+
+  ↔ _interacts with:_ `v6_curated_20260904/pool_armB_*.jsonl (write, prompt template only)`
+
+#### `curation_phase_variants_20260924.py`
+P1 follow-up: re-runs curation_layer.curate() on half_life three ways (all phases / terminal-or-unlabeled / terminal-only) now that hl_type is populated, and reports the fate of the prior manual-review-flagged groups.
+
+- **`VARIANTS`** `L31` — Defines the three phase_keep sets passed to curation_layer.curate().
+- **`main`** `L38` — Runs all three variants, compares MMPK t1/2 agreement, and tracks which 2026-09-23 flagged groups resolve/persist/disappear under the phase filter.
+
+  ↔ _interacts with:_ `build_baseline.py (bb)`, `curation_layer.py (cl)`, `manual_review_flagged_20260923.csv`, `writes manual_review_flagged_phase_20260924.csv/.xlsx + curation_phase_variants_summary_20260924.json`
+
+#### `p2_eval_harness.py`
+Phase 2 evaluation harness: re-scores every label set (phase0 vs P1-curated vs phase-split-curated) under one proper MMPK-style protocol instead of a single 70/15/15 split.
+
+- **`label_sets`** `L105` — Builds phase0_rows / curated_strata_all / curated_strata_unflagged / curated_compound_median label sets per target.
+- **`fold_map`** `L159` — Assigns folds from the union of every label set's skeletons per target, so all label sets share identical folds.
+- **`cv_run`** `L168` — 10-fold CV grouped by InChIKey-skeleton, out-of-fold predictions + naive-mean baseline.
+- **`external_eval`** `L197` — Scores the compound-median-trained model against MMPK investigational compounds absent from the corpus, dropping skeleton overlap.
+
+  ↔ _interacts with:_ `build_baseline.py (bb)`, `*_baseline_dataset_20260923.csv and *_curated_*.csv (inputs)`, `mmpk_external_test_set_20260923.csv`, `writes p2_cv_metrics/p2_oof_predictions/p2_external_mmpk_predictions/p2_summary_{tag}`
+
+#### `compound_median_check.py`
+Step 18 diagnostic: aggregates the healthy/route/release-filtered row set to one median value per compound and refits, to test whether the row-level null result is row-level noise or a genuine absence of signal.
+
+- **`aggregate_to_compound_median`** `L23` — One row per compound (median value); verifies (not assumes) that physchem descriptors are identical across a compound's own source rows.
+- **`run_target`** `L44` — Refits HistGradientBoostingRegressor at compound-median grain and appends a report section.
+
+  ↔ _interacts with:_ `build_baseline.py (bb, imports build_target_baseline, FEATURE_COLS, compound_level_split)`, `appends to {parameter}_baseline_report_20260923.md`
+
+#### `mmpk_external/mmpk/mmpk_tier1.py`
+MMPK-protocol classical baseline ('Tier-1'): HistGradientBoostingRegressor per endpoint (Cmax/AUC/Thalf) on RDKit descriptors + ECFP4 + log-dose + food/health, trained on NCATS FRDB oral-PK data -- NOT the v6 PKV corpus.
+
+- **`conv_dose_mgkg`** `L75` — Unit-string -> mg/kg converter (70kg default); reused verbatim by curation_layer.py::dose_tier.
+- **`assemble`** `L87` — Builds (compound, endpoint, dose) rows from drug_ncats.pk_raw, joined to pchem_roadmap.canonical_member/compound_master.
+- **`main`** `L155` — GroupKFold(5) on InChIKey skeleton per endpoint; writes pchem_roadmap.mmpk_dataset, mmpk/out/metrics_tier1.json, mmpk/out/tier1_<endpoint>.pkl.
+
+  ↔ _interacts with:_ `drug_ncats.pk_raw DB`, `pchem_roadmap DB (canonical_member, compound_master, compound_canonical, mmpk_dataset write)`, `physchem_roadmap/features/*.parquet (external feature files)`, `curation_layer.py (conv_dose_mgkg reused)`, `mmpk_external/mmpk/tier2/export_tier2_data.py (reads mmpk_dataset)`
+
+#### `mmpk_external/mmpk/tier2/train_tier2.py`
+Multimodal 'Tier-2' re-implementation of the published MMPK architecture (GINE mol+BRICS-fragment graphs + cross-attention + frozen ChemBERTa-77M-MTR + dose), multi-task over Cmax/AUC/Thalf.
+
+- **`MMPKNet`** `L110` — Shared GINE encoder for molecule and BRICS fragments, cross-attention fusion, ChemBERTa projection, single-task-masked multi-output head.
+- **`collate`** `L158` — Batches per-row mol/fragment graphs, ChemBERTa CLS embeddings and food/health/log-dose context into one training batch.
+- **`main`** `L204` — GroupKFold(5) training loop over tier2_dataset.parquet; per the MMPK_PAPER_AUDIT, NEVER EXECUTED -- its checkpoint-save path is read to crash after fold 0.
+
+  ↔ _interacts with:_ `mmpk/out/tier2_dataset.parquet (input, built by export_tier2_data.py)`, `GPU-only (torch, torch_geometric, transformers) -- not run in this offline/CPU environment`
+
+#### `mmpk_external/mmpk/tier2/export_tier2_data.py`
+Exports the portable Tier-2 training table (joins Tier-1's mmpk_dataset with SMILES + InChIKey-skeleton CV group) so the GPU box needs no MySQL access.
+
+- **`main`** `L10` — Joins pchem_roadmap.compound_canonical + pchem_roadmap.mmpk_dataset, writes mmpk/out/tier2_dataset.parquet.
+
+  ↔ _interacts with:_ `pchem_roadmap.compound_canonical / mmpk_dataset DB (read)`, `mmpk_external/mmpk/mmpk_tier1.py (upstream writer of mmpk_dataset)`, `mmpk_external/mmpk/tier2/train_tier2.py (downstream consumer)`
+
+**Invariants / honesty rules**
+- Compound-level train/val/test split, never document-level (build_baseline.py::compound_level_split, L417) -- deliberately distinct from the v6 LoRA training pool's document-level split, which exists to prevent a different kind of leakage.
+- identity_conflicts rows are excluded and the 2 pipe-joined combo-drug rows are dropped rather than exploded (build_general_export, L325-343) -- an honest-exclusion policy, not a guess.
+- Blank-handling is deliberately INCLUSIVE for both the healthy/route/release filter and the MMPK M2 criteria config -- measured live that an EXCLUSIVE policy collapses volume_of_distribution to 0 compounds, since release_type alone is >99.8% blank corpus-wide.
+- Read-only vs write boundary: build_baseline.py, curation_layer.py, compound_median_check.py, curation_phase_variants_20260924.py and p2_eval_harness.py are read-only against v6_curated_20260904/ and every DB, writing only inside structure_pk_baseline/ itself; only the hl_type_*/v6_template_*/v6_test_split_* scripts write into the live pool, and only behind an explicit --apply flag (dry-run is the default for every one of them).
+- Every pool-writing script never overwrites a slot that already carries hl_type, from any source, and treats a normalizer-removed slot as a decision, not a gap -- apply_value_reextract_hl_type_20260924.py explicitly checks meta.hl_type_normalization_20260924 before writing, to avoid the two-writers-undo-each-other bug found live 2026-09-24 (Step 33).
+- Every pool write follows the same safety pattern: one backup per run (*.bak_before_<tag>), write via a temp file + os.replace preserving the file's own original line ending, then re-read the bytes and byte-verify that only the intended keys changed; several scripts (hl_type_normalize_v109_20260924.py, hl_type_reextract_evidence_restore_20260924.py) additionally abort with nothing written if a pool file's mtime/size changed mid-run.
+- MMPK/Lombardo/manuscript/chemoinfo data are used only for label-level external validation, never pooled into training labels -- curation_layer.py's own docstring states this as 'M5 ... VALIDATION ONLY, never pooled into training (D1 = Option A)'.
+- Honest-negative-result reporting convention: build_baseline.py::write_target_report only claims real signal when test R2>0.15 AND the model beats the naive train-mean baseline on MAE; otherwise it writes an explicit negative-result verdict rather than tuning until a number looks good.
+- Unit mismatches are handled by explicit exclusion, not silent conversion: TARGET_CONFIGS['volume_of_distribution']['excluded_note'] documents that lombardo_db and the manuscript table report Vd in L/kg (needs per-patient body weight, unavailable) so Phase-0 uses only chemoinfo_extracted's plain-L column; curation_layer.py later re-enables the L/kg sources for the vd_real subset only, under MMPK's explicit 70kg convention (BODYWEIGHT_KG).
+- v6_template_extend_families_20260924.py only extends a record's template for an out-of-template family when every value appears verbatim in that record's own source Context (family_grounded) -- 21 of 40 candidate families failed this and were deliberately held rather than extended, to avoid training the model to invent values.
+- A single-writer protocol governs hl_type pool promotion after Step 33's collision (a foreign commit clobbered per-slot evidence and undid normalizer decisions): one chip owns applying + normalizing + committing each batch, and the re-extraction's own apply script must always be followed by the v109 normalizer.
 
 ---
 
